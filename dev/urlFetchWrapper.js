@@ -104,6 +104,9 @@
   // END FORMATTER
 
   globalContext.ApiWrapper = function (_baseurl, _params) {
+    if (typeof _baseurl == 'undefined') {
+      throw Error("requires url");
+    }
     _urlQuery = null;
     if (typeof _params === 'undefined') {
       _params = {};
@@ -112,10 +115,16 @@
     return {
       setHeader: function (key, value) {
         _params.header[key] = value;
+        return this;
       },
       
       setParam: function (key, value) {
         _params[key] = value;
+        return this;
+      },
+
+      getParam: function () {
+        return _params;
       },
       
       formatUrl: function (obj) {
@@ -123,7 +132,17 @@
       },
       
       setQuery: function (obj) {
-        _urlQuery = _baseurl + "?" + Object.keys(obj).reduce(function(a,k){a.push(k+'='+encodeURIComponent(obj[k]));return a},[]).join('&');
+        _urlQuery = _baseurl + "?" + Object.keys(obj).reduce(
+          function(a,k) {
+            a.push(k+'='+encodeURIComponent(obj[k]));
+            return a
+           },
+        []).join('&');
+        return this;
+      },
+
+      getQuery: function () {
+        return _urlQuery;
       },
       
       fetch: function(formatObj) {
