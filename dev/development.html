@@ -1,0 +1,135 @@
+<!-- 
+Code that only runs on local clientside
+Excluded from copying to source folder
+-->
+
+<script>
+
+function getUrlVars()
+{
+    var vars = [], hash;
+    var hashes = window.location.href.slice(window.location.href.indexOf('?') + 1).split('&');
+    for(var i = 0; i < hashes.length; i++)
+    {
+        hash = hashes[i].split('=');
+        vars.push(hash[0]);
+        vars[hash[0]] = hash[1];
+    }
+    return vars;
+}
+
+$(function () {
+    // insert reload button at top of DOM
+    $('<button />')
+        .text("Click to reload template html")
+        .click(function () {
+            location.href = 'Main';
+        })
+        .prependTo($('#tabs'));
+});
+
+(function (window) {
+    var googleRunScript = {
+        successHandlers: [],
+        failureHandlers: [],
+        userObject: {},
+        withSuccessHandler: function(func) {
+            this.successHandlers.push(func);
+            return this;
+        },
+        withFailureHandler: function(func) {
+            this.failureHandlers.push(func);
+            return this;
+        },
+        withUserObject: function(obj) {
+            this.userObject = obj;
+            return this;
+        },
+    };
+
+    var getter = {
+
+        clientSideMocks: {
+            returnData: function (duration) {
+                // duration is nothing in the clientside; unused
+                var columns = ['groupName', 'parentsOf', 'groupEmail', 'member', 'human', 'raw', 'forwardsTo'],
+                    rows = [
+                        ['Group Name 1', '1', 'group_name_1@igbis.edu.my', 'someone@igbis.edu.my', '', 'Never', 'forwardingAddy'],
+                        ['Group Name 1', '1', 'group_name_1@igbis.edu.my', 'someoneElse@igbis.edu.my', '', 'Never', 'forwardingAddy'],
+                        ['Group Name 2', '2', 'group_name_2@igbis.edu.my', 'someoneOver@igbis.edu.my', '', 'This has a "" in it', 'forwardingAddy'],
+                        ['Group Name 2', '2', 'group_name_2@igbis.edu.my', 'someoneOverTheRainbow@igbis.edu.my', '', 'Never', 'forwardingAddy'],
+                    ];
+                var queryObj = getUrlVars();
+                return {
+                    columns: columns,
+                    rows: rows,
+                    selector: '#theDatatable',
+                    template: queryObj['template'] ? decodeURIComponent(queryObj['template']) : '<div></div>',
+                };
+            },
+        },
+
+        /*
+            Get function allows us to add a __noSuchMethod__ feature onto
+            googleRunScript above
+
+            Limitations, because we are returning a promise, we cannot call it
+        */
+        get: function(target, name) {
+            // If already defined, i.e. with.. method, use that...
+            if (name in target) {
+                return target[name];
+
+            // otherwise this is something that needs to be emulated...
+            } else {
+                // just returning clientSideMocks[name] will not allow us to call handlers
+                // so let's return a promise
+
+                var promise = new Promise(
+                    function (resolve, reject) {
+                        try {
+                            var result = this.clientSideMocks[name](/* the arg would go here */);
+                            resolve(result);
+                        } catch(err) {
+                            reject(err)
+                        }
+                    }.bind(this)
+                );
+                promise.then(
+                    function (args) {
+                        target.successHandlers.forEach(function (func) {
+                            // call the success handlers
+                            func(args, target.userObject);
+                        });
+                    }
+                ).catch(
+                    function (args) {
+                        target.failureHandlers.forEach(function (func) {
+                            func(args, target.userObject);
+                        });
+                    }
+                );
+
+                // Need to wrap in a function in order for it to be called
+                // This means we canNOT use argument to call anything...
+                return function () { promise };
+            }
+
+        }
+    };
+
+    window.google = {
+        script: {
+            run: new Proxy(googleRunScript, getter),
+            host: {
+                close: function() { window.close(); },
+                origin: '',
+                editor: {
+                    focus: function () { /* TBI */; },
+                },
+            }
+        },
+    }
+})(window);
+
+</script>

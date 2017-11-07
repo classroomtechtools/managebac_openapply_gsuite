@@ -1,0 +1,160 @@
+<script>
+
+function returnData() {
+
+	return [];
+}
+
+$(function () {
+	// Document DOM is ready:
+
+	// Make the tabs
+	$('#tabs').tabs();
+
+	google.script.run
+
+      .withSuccessHandler(function (rawData) {
+          var template = $.parseHTML(rawData.template || ""),
+              $template = $(template),
+              columns = template ? 
+                $template.find('div').toArray().reduce(function (acc, div) {
+                  var $div = $(div);
+                  var mapped = $div.data();
+                  mapped.title = $div.data('title') || $div.attr('id');
+                  mapped.data = $div.attr('id');
+                  if (!mapped.hasOwnProperty('title')) {
+                    mapped.title = $div.attr('id');
+                  }
+                  if (!mapped.hasOwnProperty('visible')) {
+                    mapped.visible = false;
+                  }
+                  if (mapped.fType) {
+                    mapped.sortable = false;
+                  }
+                  acc.push(mapped);
+                  return acc;
+                }, [])
+              :
+                rawData.columns.reduce(function (acc, col) {
+                  mapped.data = col;
+                  acc.push({
+                    title: col, data:col,
+                    stringFilter: false, categoryFilter: false
+                  });
+                  return acc;
+                }, []);
+
+          var hasSideFilters = $template.find('div').toArray().some(function (div) {
+            var $div = $(div);
+            return ($div.data('f-placement') == 'left' && $div.attr('id'))|| false;
+          });
+
+          // Makes the datatable
+          var settings = $.extend({}, $template.data());  // copy
+          settings.columns = columns;
+
+          if (hasSideFilters) {
+            // 
+            // Add extra html to account for the sidebar required for filters on the side
+            //
+            $('#theDatatable').wrap( $('<div/>', {
+              id: 'displayTable', 
+              class: 'displayCell'
+            }));
+            $('#displayTable').wrap( $('<div/>', {
+              id: 'displayContainer',
+            }));
+            $('#displayContainer').prepend( $('<div/>', {
+              id: 'displayFilters', 
+              class: 'displayCell',
+            }));
+          }
+
+          settings.initComplete = function () {
+            this.api().columns().every( function () {
+                var column = this,
+                    title = column.dataSrc(),
+                    $div = $template.find('#'+title);
+
+                if ($div.data('f-type') == 'select') {
+                  var header = $div.data('f-label') || $div.data('title') || title;
+                  var $select = $('<select><option value="">' + header + '</option></select>')
+                      .appendTo( $(column.header()).empty() )
+                      .on( 'change', function () {
+                          var val = $(this).val();  // $.fn.dataTable.util.escapeRegex( $(this).val() );
+                          var newValue  = val; // ? '^'+val+'$' : '';
+                          column
+                              .search( newValue, true, false, true )
+                              .draw();
+                      } );
+
+                  column.data().unique().sort().each( function ( d, j ) {
+                      try {
+                        var $d = $(d);
+                      } catch (e) {
+                        // jquery might produce a syntax error, so force it to use plaintext
+                        $d = [];
+                      }
+                      if ($d.length == 1) {
+                        // Apparently passing the html ($d[0].outerHTML) is incorrect,
+                        // but inspecting column.data() reveals the html is there, not sure why...
+                        $select.append( '<option value="'+$d.text()+'">'+$d.text()+'</option>' );
+                      } else {
+                        $select.append( '<option value="'+d+'">'+d+'</option>' );
+                      }
+                  } );
+                }
+
+                if ($div.data('f-type') == 'input') {
+                  var header = $div.data('f-label') || $div.data('title');
+                  var $input = $('<input placeholder="' + header + '"/>')
+                      .appendTo( $(column.header()).empty() )
+                      .on( 'keyup change', function () {
+                          var val = $.fn.dataTable.util.escapeRegex( $(this).val() );   
+                          var newValue  = val || '';
+                          column
+                              .search( newValue, true, false, true )
+                              .draw();
+                      } );
+
+                }
+            } );
+          };
+
+          var templateCache = columns.reduce(function (acc, col) {
+            acc[col.data] = $.trim($template.find('#'+ col.data).html()) || "{{self}}";
+            return acc;
+          }, {});
+
+          var rowsToBeAdded = rawData.rows.reduce(function (acc, row) {
+              var valueObj = columns.reduce(function (a, col, index) {
+                a[col.data] = row[index];
+                return a;
+              }, {});
+              var result = columns.reduce(function (a, col) {
+                var before = templateCache[col.data];
+                var combined = Object.assign(valueObj, {self: valueObj[col.data]});
+                var after = Handlebars.compile(before)( combined );
+                a[col.data] = after;
+                return a;
+              }, {});
+              acc.push(result);
+              return acc;
+          }, []);
+
+          settings.data = rowsToBeAdded;
+          $DT = $(rawData.selector)
+            .addClass($template.data('add-class') || '')
+            .DataTable(settings);
+       })
+
+      .withFailureHandler(function (error) {
+          console.log(error);
+      })
+
+	.returnData();  // interact with document with Google API calls
+
+
+});
+
+</script>
